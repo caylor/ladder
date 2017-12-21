@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+
+const program = require('commander');
+const chalk = require('chalk');
+const path = require('path');
+const fs = require('fs-extra');
+const inquirer = require('inquirer');
+const validateProjectName = require('validate-npm-package-name');
+const download = require('download-git-repo');
+const ora = require('ora');
+const pwd = process.cwd();
+
+program
+    .usage('[project-name]')
+    .on('--help', function() {
+        console.log('  Examples:');
+        console.log();
+        console.log(chalk.gray('    # create a new project'));
+        console.log('    $ ladder init my-project');
+        console.log();
+        console.log(chalk.gray('    # generate a new project in current directory'));
+        console.log('    $ ladder init');
+        console.log();
+    })
+    .parse(process.argv)
+
+const dirName = program.args[0];
+
+if (dirName) {
+    const targetDir = path.resolve(dirName);
+
+    if (fs.existsSync(targetDir)) {
+        inquirer.prompt({
+            type: 'confirm', 
+            message: `Target directory ${chalk.green(targetDir)} exists. Continue?`, 
+            name: 'continue'
+        })
+        .then(answers => {
+        
+            if (answers.continue) {
+                creactApp(targetDir);
+            }
+        });
+    } else {
+        const appName = path.basename(targetDir);
+        checkAppName(appName);
+        creactApp(targetDir);
+    }
+} else {
+    inquirer.prompt({
+        type: 'confirm', 
+        message: 'Generate project in current directory?', 
+        name: 'continue'
+    })
+    .then(answers => {
+      
+        if (answers.continue) {
+            creactApp();
+        }
+    });
+}
+
+function creactApp(dir = pwd) {
+    fs.ensureDirSync(dir);
+
+    if (isConflictIn(dir)) {
+        console.log(
+            `The directory ${chalk.green(dir)} contains files that could conflict.`
+        );
+        console.log('Try solve the conflicts or generate project in another directory.');
+        process.exit(1);
+    } else {
+        generateTemp(dir);
+    }
+}
+
+function generateTemp (targetDir) {
+    inquirer.prompt({
+        type: 'list', 
+        message: `which template do you want?`, 
+        name: 'template',
+        choices: [{
+            name: 'pwa',
+            value: 'pwa-value'
+        }, {
+            name: 'test',
+            value: 'test-value'
+        }]
+    })
+    .then(answers => {
+        const spinner = ora('downloading template');
+        spinner.start();
+
+        download(answers.template, targetDir, function (err) {
+            spinner.stop();
+
+            if (err) {
+                logger.fatal('Failed to download repo ' + answers.template + ': ' + err.message.trim()); 
+            }
+        })
+    })
+}
+
+function checkAppName(appName) {
+    const validationResult = validateProjectName(appName);
+
+    if (!validationResult.validForNewPackages) {
+        console.error(
+            `Could not create a project called ${chalk.red(`"${appName}"`)} because of npm naming restrictions:`
+        );
+        printValidationResults(validationResult.errors);
+        printValidationResults(validationResult.warnings);
+        process.exit(1);
+    }
+}
+
+function printValidationResults(results) {
+
+    if (typeof results !== 'undefined') {
+        results.forEach(error => {
+            console.error(chalk.red(`  *  ${error}`));
+        });
+    }
+}
+
+function isConflictIn(dir) {
+    const validFiles = [
+        // 'package.json'
+    ];
+    return fs.readdirSync(dir).some(file => validFiles.includes(file));
+}
+
+
+
+
+
+
+
+
